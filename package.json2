@@ -1,13 +1,11 @@
 {
   "name": "elysia",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "bun run --watch src/index.ts",
     "build": "bun build.ts",
-    "version:patch": "bun ./bump-version.ts --patch",
-    "version:minor": "bun ./bump-version.ts --minor",
-    "version:major": "bun ./bump-version.ts --major"
+    "version:patch": "npm version patch"
   },
   "dependencies": {
     "@elysiajs/cors": "^0.7.0",

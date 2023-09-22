@@ -1,0 +1,18 @@
+version: "3"
+services:
+  api:
+    container_name: plai-api-payment
+    image: ${API_IMAGE}
+    ports:
+      - 3334:3333
+    platform: linux/amd64
+    restart: always
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - PORT=3333
+      - NEXT_PUBLIC_WEB_URL=${WEB_URL}
+    networks:
+      - supertokens_app_network
+networks:
+  supertokens_app_network:
+    external: true

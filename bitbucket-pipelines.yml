@@ -1,0 +1,117 @@
+definitions:
+  services:
+    docker:
+      memory: 2048
+  steps:
+    - step: &hi
+        name: Hi
+        script:
+          - echo Hi Bitbucket pipelines
+    - step: &web-api-info
+        name: Web and Api
+        script:
+          - echo "Please run pipeline for web & api by manually in staging"
+image: atlassian/default-image:4
+pipelines:
+  custom:
+    dockerprune:
+      - step:
+          name: docker prune
+          script:
+            - eval $(ssh-agent -s)
+            # - apt-get update && apt-get install -y openssh-client
+            - echo $VM_IP
+            - mkdir -p ~/.ssh
+            - echo $(echo "$SSH_PRIVATE_KEY" | base64 -d) > ~/.ssh/ID_RSA
+            - echo "$(echo "$SSH_PRIVATE_KEY" | base64 -d)" | tr -d '\r' | ssh-add -
+            - touch ~/.ssh/config
+            - touch ~/.ssh/known_hosts
+            - chmod -R 400 ~/.ssh
+            ###### copy docker-compose.dockerhub.yaml to VM ######
+            - ssh -o StrictHostKeyChecking=no -i ~/.ssh/ID_RSA deployer@$VM_IP "bash -c ls -l && docker system prune -a -f"
+    api:
+      - step:
+          name: Build docker image
+          script:
+            # - npm i -g just-install
+            - IMAGE_NAME=plai-api-payment
+            - IMAGE=${DOCKERHUB_USERNAME}/${IMAGE_NAME}
+            # - just docker-api-build-pipeline $IMAGE
+            - docker build -f apps/api/Dockerfile --platform linux/amd64 -t ${IMAGE} .
+            - docker save $IMAGE --output "${IMAGE_NAME}.tar"
+          services:
+            - docker
+          caches:
+            - docker
+          artifacts:
+            - "*.tar"
+      - step:
+          name: Publish image to Dockerhub
+          script:
+            - echo ${DOCKERHUB_PASSWORD} | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+            - IMAGE_NAME=plai-api-payment
+            - docker load --input "${IMAGE_NAME}.tar"
+            # - VERSION="staging-0.1.${BITBUCKET_BUILD_NUMBER}"
+            - export VERSION=$(node -p "require('./apps/api/package.json').version")
+            - STAGE="staging"
+            - IMAGE=${DOCKERHUB_USERNAME}/${IMAGE_NAME}
+            - FULLTAG=${IMAGE}:${STAGE}-${VERSION}
+            - docker tag "${IMAGE}" "${FULLTAG}"
+            - docker push "${FULLTAG}"
+          services:
+            - docker
+      # deploy api
+      - step:
+          name: Deploy to Google Compute engine
+          deployment: Staging
+          script:
+            - IMAGE_NAME=plai-api-payment
+            - export VERSION=$(node -p "require('./apps/api/package.json').version")
+            - STAGE="staging"
+            - IMAGE=${DOCKERHUB_USERNAME}/${IMAGE_NAME}
+            - FULLTAG=${IMAGE}:${STAGE}-${VERSION}
+            # - VERSION="staging-0.1.${BITBUCKET_BUILD_NUMBER}"
+            # - IMAGE=${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${VERSION}
+            ##### setup this container that make it can communicate with VM via ssh #####
+            - eval $(ssh-agent -s)
+            # - apt-get update && apt-get install -y openssh-client
+            - echo $VM_IP
+            - mkdir -p ~/.ssh
+            - echo $(echo "$SSH_PRIVATE_KEY" | base64 -d) > ~/.ssh/ID_RSA
+            - echo "$(echo "$SSH_PRIVATE_KEY" | base64 -d)" | tr -d '\r' | ssh-add -
+            - touch ~/.ssh/config
+            - touch ~/.ssh/known_hosts
+            - chmod -R 400 ~/.ssh
+            ##### copy docker-compose.dockerhub.yaml to VM #####
+            - scp -o BatchMode=yes -o StrictHostKeyChecking=no -i ~/.ssh/ID_RSA -r ./docker-compose.payment.yaml deployer@$VM_IP:docker-compose.payment.yaml
+            - ssh -o StrictHostKeyChecking=no -i ~/.ssh/ID_RSA deployer@$VM_IP "docker pull $FULLTAG"
+            - ssh -o StrictHostKeyChecking=no -i ~/.ssh/ID_RSA deployer@$VM_IP "bash -c ls -l && API_IMAGE=$FULLTAG docker compose -f docker-compose.payment.yaml rm --stop --force --volumes api"
+            - ssh -o StrictHostKeyChecking=no -i ~/.ssh/ID_RSA deployer@$VM_IP "bash -c ls -l && INFISICAL_TOKEN=$INFISICAL_TOKEN API_IMAGE=$FULLTAG infisical --domain=$INFISICAL_URL --env=staging run -- docker compose -f docker-compose.payment.yaml up -d api"
+          services:
+            - docker
+    restart-api:
+      # restart api
+      - step:
+          name: restart api
+          deployment: Staging
+          script:
+            - IMAGE_NAME=plai-api-payment
+            - export VERSION=$(node -p "require('./apps/api/package.json').version")
+            - STAGE="staging"
+            - IMAGE=${DOCKERHUB_USERNAME}/${IMAGE_NAME}
+            - FULLTAG=${IMAGE}:${STAGE}-${VERSION}
+            # - VERSION="staging-0.1.${BITBUCKET_BUILD_NUMBER}"
+            # - IMAGE=${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${VERSION}
+            ##### setup this container that make it can communicate with VM via ssh #####
+            - eval $(ssh-agent -s)
+            # - apt-get update && apt-get install -y openssh-client
+            - echo $VM_IP
+            - mkdir -p ~/.ssh
+            - echo $(echo "$SSH_PRIVATE_KEY" | base64 -d) > ~/.ssh/ID_RSA
+            - echo "$(echo "$SSH_PRIVATE_KEY" | base64 -d)" | tr -d '\r' | ssh-add -
+            - touch ~/.ssh/config
+            - touch ~/.ssh/known_hosts
+            - chmod -R 400 ~/.ssh
+            ##### restart api(docker compsoe service's nam
+            - ssh -o StrictHostKeyChecking=no -i ~/.ssh/ID_RSA deployer@$VM_IP "bash -c ls -l && API_IMAGE=$FULLTAG docker compose -f docker-compose.payment.yaml rm --stop --force --volumes api"
+            - ssh -o StrictHostKeyChecking=no -i ~/.ssh/ID_RSA deployer@$VM_IP "bash -c ls -l && INFISICAL_TOKEN=$INFISICAL_TOKEN API_IMAGE=$FULLTAG infisical --domain=$INFISICAL_URL --env=staging run -- docker compose -f docker-compose.payment.yaml up -d api"

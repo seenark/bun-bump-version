@@ -1,15 +1,28 @@
-# Elysia with Bun runtime
 
-## Getting Started
-To get started with this template, simply paste this command into your terminal:
+# Bun bump version
+
+only one file 
+
+`bump-version.ts` to make it work
+
+## usage
+
+- version patch
+
 ```bash
-bun create elysia ./elysia-example
+  bun bump-version.ts --patch
 ```
 
-## Development
-To start the development server run:
+- version minor
+
 ```bash
-bun run dev
+  bun bump-version.ts --minor
 ```
 
-Open http://localhost:3000/ with your browser to see the result.
+- version major
+
+```bash
+  bun bump-version.ts --major
+```
+
+## this example include Elysia
